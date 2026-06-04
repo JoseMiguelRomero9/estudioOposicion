@@ -1,0 +1,2319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Simulador de Test - TAI</title>
+    <style>
+        :root {
+            --correcto: #2ecc71;
+            --incorrecto: #e74c3c;
+            --primario: #3498db;
+            --gris: #f4f6f7;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--gris); margin: 0; padding: 20px; color: #2c3e50; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1, h2 { text-align: center; color: #2c3e50; }
+        .oculto { display: none; }
+        
+        /* Pantalla de Configuración */
+        .selector-temas { display: grid; gap: 10px; margin: 15px 0; }
+        .input-cantidad { width: 100%; padding: 10px; box-sizing: border-box; border: 2px solid #bdc3c7; border-radius: 5px; font-size: 16px; margin-bottom: 20px; }
+        .btn-principal { background: var(--primario); color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; }
+        .btn-principal:hover { filter: brightness(0.9); }
+        
+        /* Pantalla de Juego */
+        .card-pregunta { margin-top: 20px; }
+        .opcion { display: block; background: #fff; border: 2px solid #bdc3c7; padding: 15px; margin: 10px 0; border-radius: 6px; cursor: pointer; transition: 0.2s; }
+        .opcion:hover { background: #eaeded; }
+        
+        /* Clases de estado (Colores) */
+        .opcion.correcta { background-color: var(--correcto) !important; color: white; border-color: #27ae60; }
+        .opcion.incorrecta { background-color: var(--incorrecto) !important; color: white; border-color: #c0392b; }
+        
+        /* Checkbox Dudoso */
+        .duda-container { background: #fef9e7; border: 1px solid #f5b041; padding: 12px; margin: 15px 0; border-radius: 6px; display: flex; align-items: center; gap: 10px; font-weight: bold; }
+        .actions { display: flex; gap: 10px; margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>📝 Simulador de Test Oposiciones</h1>
+    <hr>
+
+    <div id="pantalla-config">
+        <h2>1. Selecciona los Temas</h2>
+        <div class="selector-temas" id="lista-temas">
+            </div>
+
+        <h2>2. Número de preguntas del test</h2>
+        <input type="number" id="num-preguntas" class="input-cantidad" value="6" min="1">
+
+        <h2>3. Opciones de Generación</h2>
+        <button class="btn-principal" onclick="iniciarTest()">Generar Test Aleatorio</button>
+        <button class="btn-principal" onclick="iniciarTestFalladas()" style="background:#e67e22; margin-top: 10px;">Repasar Falladas/Dudosas</button>
+    </div>
+
+    <div id="pantalla-test" class="oculto">
+        <div style="display: flex; justify-content: space-between; font-weight: bold;">
+            <span id="info-progreso">Pregunta 1 de X</span>
+            <span id="info-tema" style="color: var(--primario);">Tema</span>
+        </div>
+        
+        <div class="card-pregunta">
+            <h3 id="texto-pregunta">Aquí irá el enunciado de la pregunta</h3>
+            <div id="contenedor-opciones">
+                </div>
+        </div>
+
+        <div class="duda-container">
+            <input type="checkbox" id="chk-duda" style="transform: scale(1.3);">
+            <label for="chk-duda">🤔 No estoy seguro (Se guardará para repasar aunque acierte)</label>
+        </div>
+
+        <div class="actions">
+            <button id="btn-siguiente" class="btn-principal oculto" onclick="siguientePregunta()">Siguiente Pregunta ➡️</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// --- BANCO DE PREGUNTAS AMPLIADO CON TU PDF ---
+const bancoPreguntas = {
+    "Tema 1: Constitución Española": [
+        {
+            id: 1,
+            pregunta: "¿En qué parte de la Constitución Española se regula la nacionalidad española?",
+            opciones: {
+                a: "En el Título Preliminar.",
+                b: "En el Preámbulo.",
+                c: "En el Título Primero.",
+                d: "En el Título Segundo."
+            },
+            correcta: "c"
+        },
+        {
+            id: 2,
+            pregunta: "De acuerdo su Preámbulo, ¿quién ratifica la Constitución Española de 1978?",
+            opciones: {
+                a: "El Rey.",
+                b: "El pueblo español.",
+                c: "Las Cortes Generales.",
+                d: "El Gobierno."
+            },
+            correcta: "b"
+        },
+        {
+            id: 3,
+            pregunta: "De conformidad con la Constitución Española, ¿cuál de las siguientes funciones corresponde al Rey?",
+            opciones: {
+                a: "La iniciativa de reforma constitucional.",
+                b: "Dirigir la acción del Gobierno.",
+                c: "Proponer la disolución del Congreso, del Senado o de las Cortes Generales.",
+                d: "Convocar elecciones en los términos previstos en la Constitución."
+            },
+            correcta: "d"
+        },
+        {
+            id: 4,
+            pregunta: "Señale la respuesta correcta:",
+            opciones: {
+                a: "La sucesión en el trono seguirá el orden regular de premoriencia y representación.",
+                b: "La persona del Rey es inviolable y no está sujeta a responsabilidad.",
+                c: "Las abdicaciones y renuncias y cualquier duda de hecho o de derecho que ocurra en el orden de sucesión a la Corona se resolverán por una ley marco.",
+                d: "El Rey nombra y releva a los miembros civiles y militares de su Casa previa autorización de las Cortes Generales."
+            },
+            correcta: "b"
+        },
+        {
+            id: 5,
+            pregunta: "Es susceptible de recurso de amparo ante el Tribunal Constitucional la vulneración del derecho:",
+            opciones: {
+                a: "A la libertad de cátedra.",
+                b: "A la herencia.",
+                c: "A contraer matrimonio con plena igualdad jurídica.",
+                d: "A disfrutar de una vivienda digna y adecuada."
+            },
+            correcta: "a"
+        },
+        {
+            id: 6,
+            pregunta: "El artículo 29 de la Constitución Española reconoce el derecho de petición a:",
+            options: {
+                a: "Todos los ciudadanos.",
+                b: "Todos los españoles.",
+                c: "Todas las personas que residen en territorio español.",
+                d: "Todas las personas censadas en España."
+            },
+            correcta: "b"
+        },
+        {
+            id: 7,
+            pregunta: "¿Cuál de las siguientes funciones NO corresponde al Rey, de conformidad con la Constitución Española?",
+            opciones: {
+                a: "Promulgar leyes.",
+                b: "Dirigir la Administración militar.",
+                c: "Convocar referéndum en los casos previstos en la Constitución Española.",
+                d: "Nombrar y separar a los miembros del Gobierno."
+            },
+            correcta: "b"
+        },
+        {
+            id: 8,
+            pregunta: "De acuerdo con la Constitución Española, ¿cuál de los siguientes derechos debe ser desarrollado mediante ley orgánica?",
+            opciones: {
+                a: "El derecho a la propiedad privada.",
+                b: "El derecho de huelga de los trabajadores para la defense de sus intereses.",
+                c: "El derecho a la protección a la salud.",
+                d: "El derecho a disfrutar de un medio ambiente adecuado para el desarrollo de la persona."
+            },
+            correcta: "b"
+        },
+        {
+            id: 9,
+            pregunta: "Según la Constitución Española, la función de promulgar las leyes corresponde a:",
+            opciones: {
+                a: "Las Cortes Generales.",
+                b: "El Congreso de los Diputados.",
+                c: "El Rey.",
+                d: "El Presidente del Gobierno."
+            },
+            correcta: "c"
+        },
+        {
+            id: 10,
+            pregunta: "El derecho al honor, a la intimidad personal y familiar y a la propia imagen queda garantizado por el artículo 18.1 de la Constitución Española. Este derecho podrá ser suspendido:",
+            opciones: {
+                a: "En ningún caso podrá ser suspendido.",
+                b: "Una Ley orgánica podrá determinar la forma y los casos en los que, de forma individual y con el adecuado puedan ser suspendido.",
+                c: "Cuando se acuerde la declaración del estado de excepción o de sitio en los términos previstos en la Constitución.",
+                d: "Únicamente cuando se acuerde el estado de sitio en los términos previstos por la Constitución en el artículo 116."
+            },
+            correcta: "a"
+        },
+        {
+            id: 11,
+            pregunta: "Conforme a la Constitución Española, la forma política del Estado español es la:",
+            opciones: {
+                a: "Monarquía democrática.",
+                b: "Monarquía limitada.",
+                c: "Monarquía constitucional.",
+                d: "Monarquía parlamentaria."
+            },
+            correcta: "d"
+        },
+        {
+            id: 12,
+            pregunta: "Según la Constitución Española, los valores superiores del ordenamiento jurídico son:",
+            opciones: {
+                a: "La libertad, la justicia, la igualdad y el pluralismo político.",
+                b: "La legalidad, la jerarquía normativa, la publicidad de las normas, la irretroactividad de las disposiciones sancionadoras no favorables o restrictivas de derechos individuales, la seguridad jurídica, la responsabilidad y la interdicción de la arbitrariedad de los poderes públicos.",
+                c: "Los derechos fundamentales y las libertades públicas.",
+                d: "La dignidad de la persona, los derechos inviolables que le son inherentes, el libre desarrollo de la personalidad, el respeto a la ley y a los derechos de los demás."
+            },
+            correcta: "a"
+        },
+        {
+            id: 13,
+            pregunta: "El artículo 27 de la Constitución Española regula el derecho a la educación. En este precepto se prevé expresamente que:",
+            opciones: {
+                a: "Todos los españoles tienen derecho a la educación universitaria.",
+                b: "Todos tienen derecho a la educación, sin que se haga referencia a nacionalidad alguna, reconociéndose además la libertad de enseñanza.",
+                c: "Las Comunidades Autónomas tendrá derecho a desarrollar la legislación básica que apruebe el Estado en materia educativa.",
+                d: "Los poderes públicos fomentarán la formación profesional orientado al mercado de trabajo."
+            },
+            correcta: "b"
+        },
+        {
+            id: 14,
+            pregunta: "En relación con los principios rectores de la política social y económica previstos en el Capítulo III del Título I de la Constitución Española, su recognition, respeto y protección se asegura del siguiente modo:",
+            opciones: {
+                a: "Está sujeto a reserva de ley orgánica.",
+                b: "Permite la interposición del recurso de amparo para garantizar su protección.",
+                c: "No cabe la interposición del recurso de amparo, pero si la vía judicial preferente y sumaria, en todo caso.",
+                d: "Informarán la legislación positiva, la práctica judicial y la actuación de los poderes públicos."
+            },
+            correcta: "d"
+        },
+        {
+            id: 15,
+            pregunta: "Según la Constitución Española, de los actos del Rey será responsable:",
+            opciones: {
+                a: "Los miembros civiles y militares de la Casa Real.",
+                b: "El Rey.",
+                c: "Aquel que los refrende.",
+                d: "Aquel que los proponga."
+            },
+            correcta: "c"
+        },
+        {
+            id: 16,
+            pregunta: "Según el artículo 57 de la Constitución Española, cualquier duda de hecho o de derecho que ocurra en el orden de sucesión a la Corona, se resolverá:",
+            opciones: {
+                a: "Por una ley orgánica.",
+                b: "Por el Congreso de los Diputados.",
+                c: "Por el Tribunal Constitucional.",
+                d: "Por las Cortes Generales mediante acuerdo conjunto."
+            },
+            correcta: "a"
+        },
+        {
+            id: 17,
+            pregunta: "Según la Constitución Española, el instrumento fundamental para la participación política son:",
+            opciones: {
+                a: "Las Cortes Generales.",
+                b: "Los partidos políticos.",
+                c: "Los sindicatos.",
+                d: "Las Comunidades Autónomas."
+            },
+            correcta: "b"
+        },
+        {
+            id: 18,
+            pregunta: "De conformidad con la Constitución Española, extinguidas todas las líneas llamadas en Derecho para la sucesión en el trono:",
+            opciones: {
+                a: "Las Cortes Generales proveerán a la sucesión en la forma que más convenga a los intereses de España.",
+                b: "Las Cortes Generales proveerán a la sucesión atendiendo exclusivamente a los imperativos genealógicos conocidos.",
+                c: "El Congreso de los Diputados proveerá a la sucesión de conformidad con los usos y costumbres existentes.",
+                d: "El Congreso de los Diputados proveerá a la sucesión a lo que decidan dos grupos parlamentarios o una quinta parte de los Diputados."
+            },
+            correcta: "a"
+        },
+        {
+            id: 19,
+            pregunta: "La tutela de los derechos fundamentales y libertades públicas reconocidos en la Sección primera del Capítulo II del Título I de la Constitución Española podrá recabarse por cualquier ciudadano:",
+            opciones: {
+                a: "Solo ante el Tribunal Constitucional de acuerdo con lo previsto en el art. 161.1.a), referente al recurso de inconstitucionalidad.",
+                b: "Solo ante los tribunales ordinarios por un procedimiento basado en los principios de preferencia y sumariedad.",
+                c: "Ante los tribunales ordinarios por un procedimiento basado en los principios de preferencia y sumariedad y, en su caso, ante el Tribunal Constitucional a través del recurso de inconstitucionalidad.",
+                d: "Ante los tribunales ordinarios por un procedimiento basado en los principios de preferencia y sumariedad y, en su caso, a través del recurso de amparo ante el Tribunal Constitucional."
+            },
+            correcta: "d"
+        },
+        {
+            id: 20,
+            pregunta: "Según el artículo 22 de la Constitución Española, las asociaciones solo podrán ser disueltas o suspendidas en sus actividades:",
+            opciones: {
+                a: "Por Real Decreto.",
+                b: "Por Orden del Ministerio de Interior.",
+                c: "Por resolución judicial motivada.",
+                d: "Por resolución del Delegado del Gobierno de la Comunidad Autónoma donde tenga establecido su domicilio la asociación."
+            },
+            correcta: "c"
+        },
+        {
+            id: 21,
+            pregunta: "Según el artículo 59 de la Constitución Española, será válida la Regencia nombrada por las Cortes Generales que se componga del siguiente número de personas:",
+            opciones: {
+                a: "Cinco.",
+                b: "Dos.",
+                c: "Cuatro.",
+                d: "Siete."
+            },
+            correcta: "a"
+        },
+        {
+            id: 22,
+            pregunta: "Según la Constitución Española, el ejercicio de la libertad de expresión y del derecho de información pueden restringirse:",
+            opciones: {
+                a: "En caso de flagrante delito.",
+                b: "No puede restringirse mediante ningún tipo de censura previa.",
+                c: "Por resolución de la Administración competente.",
+                d: "Estableciendo un sistema de control previo."
+            },
+            correcta: "b"
+        },
+        {
+            id: 23,
+            pregunta: "Según la Constitución Española, cuando se acuerde la declaración del estado de excepción o de sitio, la Constitución NO permite la suspensión de:",
+            opciones: {
+                a: "El derecho a la inviolabilidad del domicilio.",
+                b: "El derecho a adoptar medidas de conflicto colectivo.",
+                c: "El derecho de asociación.",
+                d: "El derecho a comunicar o recibir libremente información veraz."
+            },
+            correcta: "c"
+        },
+        {
+            id: 24,
+            pregunta: "Según se establece en la Constitución Española, los poderes públicos promoverán en beneficio del interés general:",
+            opciones: {
+                a: "La investigación científica.",
+                b: "La ciencia.",
+                c: "La investigación técnica.",
+                d: "Todas las respuestas son correctas."
+            },
+            correcta: "d"
+        },
+        {
+            id: 25,
+            pregunta: "La Constitución Española dispone, en relación con la Iglesia Católica y las demás confesiones religiosas que:",
+            opciones: {
+                a: "Los poderes públicos deberán adoptar relaciones oficiales con las mismas.",
+                b: "Los poderes públicos mantendrán relaciones de cooperación con las mismas.",
+                c: "Los poderes públicos y privados mantendrán relaciones de cooperación con las mismas.",
+                d: "El Estado y las Comunidades Autónomas, en sus respectivos Estatutos de Autonomía, adoptarán como oficiales las que correspondan."
+            },
+            correcta: "b"
+        },
+        {
+            id: 26,
+            pregunta: "La tortura y las penas o tratos inhumanos o degradantes, según la regulación constitucional, atentan contra el derecho a:",
+            opciones: {
+                a: "La libertad personal y la seguridad.",
+                b: "La libertad de expresión.",
+                c: "El honor y la intimidad personal y familiar.",
+                d: "La vida y la integridad física y moral."
+            },
+            correcta: "d"
+        },
+        {
+            id: 27,
+            pregunta: "El artículo 14 de Constitución Española establece el principio de igualdad de los españoles ante la ley. La Constitución prohíbe que pueda prevalecer discriminación alguna, entre otras circunstancias, por razón de:",
+            opciones: {
+                a: "Nacionalidad, raza, sexo y religión.",
+                b: "Sexo, nacimiento, religión, opinión y raza.",
+                c: "Opinión, sexo, creencias y raza.",
+                d: "Nacionalidad, sexo, creencias, nacimiento y opinión."
+            },
+            correcta: "b"
+        },
+        {
+            id: 28,
+            pregunta: "El régimen público de Seguridad Social, que la Constitución Española obliga a mantener a todos los poderes públicos, debe garantizar:",
+            opciones: {
+                a: "Las prestaciones y servicios suficientes.",
+                b: "La asistencia y prestaciones sociales suficientes.",
+                c: "La atención y prestaciones sociales adecuadas.",
+                d: "La asistencia y prestaciones complementarias suficientes."
+            },
+            correcta: "b"
+        },
+        {
+            id: 29,
+            pregunta: "El derecho reconocido en la Constitución Española a acceder en condiciones de igualdad a las funciones y cargos públicos requiere el cumplimiento de los requisitos señalados por:",
+            opciones: {
+                a: "Los poderes públicos.",
+                b: "Las leyes.",
+                c: "Los tratados y las leyes.",
+                d: "Las normas jurídicas."
+            },
+            correcta: "b"
+        },
+        {
+            id: 30,
+            pregunta: "Según la Constitución Española, la ley:",
+            opciones: {
+                a: "Garantizará el deber de negociar en materia laboral entre los representantes de los trabajadores y empresarios.",
+                b: "Garantizará la fuerza vinculante de los convenios.",
+                c: "Facilitará el derecho a la negociación colectiva laboral.",
+                d: "Podrá reconocer la fuerza vinculante de los convenios."
+            },
+            correcta: "b"
+        },
+        {
+            id: 31,
+            pregunta: "España se constituye, según el artículo 1 de la Constitución Española, en un Estado social y democrático de Derecho, que propugna como valores superiores de su ordenamiento jurídico:",
+            opciones: {
+                a: "La libertad, la justicia, la igualdad y la publicidad de las normas.",
+                b: "La legalidad, la justicia, la igualdad y el pluralismo político.",
+                c: "La libertad, la justicia, la igualdad y el pluralismo político.",
+                d: "La legalidad, la jerarquía, la igualdad y el pluralismo político."
+            },
+            correcta: "c"
+        },
+        {
+            id: 32,
+            pregunta: "La Constitución Española reconoce el derecho de todos a disfrutar de un medio ambiente:",
+            opciones: {
+                a: "Digno y adecuado para el desarrollo de la sociedad.",
+                b: "Adecuado para la integridad de la persona.",
+                c: "Adecuado para el desarrollo de la persona.",
+                d: "Digno y adecuado para el desarrollo de la persona."
+            },
+            correcta: "c"
+        },
+        {
+            id: 33,
+            pregunta: "Los poderes públicos, según la Constitución Española, deben promover las condiciones favorables para el progreso social y económico y para una distribución de:",
+            opciones: {
+                a: "La renta regional y general más justa.",
+                b: "La renta personal y regional más equitativa.",
+                c: "La asistencia personal y regional estable y equitativa.",
+                d: "La renta regional y social más equitativa."
+            },
+            correcta: "b"
+        },
+        {
+            id: 34,
+            pregunta: "La Constitución Española reconoce el derecho a:",
+            opciones: {
+                a: "La protección de la salud física.",
+                b: "La protección de la salud.",
+                c: "La salud pública.",
+                d: "La protección sanitaria de la salud."
+            },
+            correcta: "b"
+        },
+        {
+            id: 35,
+            pregunta: "Además de las penas privativas de libertad, la Constitución Española dispone que estarán orientadas hacia la reeducación y reinserción social:",
+            opciones: {
+                a: "Las medidas de seguridad privativas.",
+                b: "Las medidas de seguridad privativas de libertad.",
+                c: "Las medidas de seguridad.",
+                d: "Las medidas privativas de seguridad."
+            },
+            correcta: "c"
+        },
+        {
+            id: 36,
+            pregunta: "De conformidad con la Constitución Española, el procedimiento ante los Tribunales ordinarios para recabar la tutela de los derechos fundamentales y libertades públicas está basado en los principios de:",
+            opciones: {
+                a: "Juez ordinario predeterminado por la Ley y preferencia y sumariedad.",
+                b: "Preferencia y publicidad sin dilaciones indebidas.",
+                c: "Preferencia y sumariedad.",
+                d: "Tutela efectiva y sumariedad."
+            },
+            correcta: "c"
+        },
+        {
+            id: 37,
+            pregunta: "De acuerdo con la Constitución Española, los centros docentes sostenidos por la Administración con fondos públicos estarán intervenidos en el control y gestión por:",
+            opciones: {
+                a: "La dirección de los mismos.",
+                b: "El profesorado y los padres.",
+                c: "La propia Administración.",
+                d: "El profesorado, los padres y, en su caso, los alumnos."
+            },
+            correcta: "d"
+        },
+        {
+            id: 38,
+            pregunta: "De acuerdo con la Constitución Española, el gasto público realizará una:",
+            opciones: {
+                a: "Asignación equitativa de los ingresos personales o patrimoniales de carácter público.",
+                b: "Distribución equitativa de los ingresos públicos.",
+                c: "Asignación eficiente de los recursos públicos.",
+                d: "Asignación equitativa de los recursos públicos."
+            },
+            correcta: "d"
+        },
+        {
+            id: 39,
+            pregunta: "La inscripción de las asociaciones constituidas al amparo del artículo 22 de la Constitución Española debe efectuarse:",
+            opciones: {
+                a: "A los efectos de su reconocimiento.",
+                b: "A los solos efectos de su constitución.",
+                c: "A los solos efectos de publicidad.",
+                d: "A los efectos de información."
+            },
+            correcta: "c"
+        },
+        {
+            id: 40,
+            pregunta: "Se consideren asociaciones ilegales por la Constitución Española:",
+            opciones: {
+                a: "Las asociaciones secretas.",
+                b: "Las que persigan fines ilícitos.",
+                c: "Las asociaciones que utilicen medios tipificados como delito.",
+                d: "Las asociaciones indebidamente inscritas en el registro."
+            },
+            correcta: "c"
+        },
+        {
+            id: 41,
+            pregunta: "De acuerdo con la Constitución Española, el sistema tributario se inspira en los principios de:",
+            opciones: {
+                a: "Justicia e igualdad.",
+                b: "Legalidad, economía y justicia.",
+                c: "Igualdad y progresividad.",
+                d: "Progresividad, confiscatoriedad e igualdad."
+            },
+            correcta: "c"
+        },
+        {
+            id: 42,
+            pregunta: "La garantía constitucional de no privación de la nacionalidad española se asegura a:",
+            opciones: {
+                a: "Todos los españoles.",
+                b: "Los españoles de origen y los que posean la doble nacionalidad.",
+                c: "Sólo a los españoles de origen.",
+                d: "Los extranjeros naturalizados en España."
+            },
+            correcta: "c"
+        },
+        {
+            id: 43,
+            pregunta: "Atendiendo a la estructura de la Constitución Española, el derecho a disfrutar de una vivienda digna y adecuada es:",
+            opciones: {
+                a: "Un derecho fundamental.",
+                b: "Un derecho ciudadano.",
+                c: "Un principio rector.",
+                d: "Ninguno de los anteriores."
+            },
+            correcta: "c"
+        },
+        {
+            id: 44,
+            pregunta: "En su artículo 14 la Constitución española propugna que los españoles son iguales ante la ley, sin que pueda prevalecer discriminación alguna por razón de:",
+            opciones: {
+                a: "Opinión.",
+                b: "Género.",
+                c: "Ideología.",
+                d: "Creencias."
+            },
+            correcta: "a"
+        },
+        {
+            id: 45,
+            pregunta: "Para la sucesión en el trono en España, según la Constitución Española, será preferido en el mismo grado:",
+            opciones: {
+                a: "El grado más próximo al más remoto.",
+                b: "El varón a la mujer.",
+                c: "La persona de más edad a la de menos.",
+                d: "La línea anterior a la posterior."
+            },
+            correcta: "b"
+        },
+        {
+            id: 46,
+            pregunta: "Según el artículo 9.1 de la Constitución española, ¿a qué están sujetos los poderes públicos y los ciudadanos?",
+            opciones: {
+                a: "A la Constitución, a la ley y al resto del ordenamiento jurídico.",
+                b: "A la Constitución y al resto del ordenamiento jurídico.",
+                c: "A la ley y al ordenamiento jurídico.",
+                d: "A la Constitución y a la ley."
+            },
+            correcta: "b"
+        },
+        {
+            id: 47,
+            pregunta: "¿Qué parte de la Constitución Española NO tiene valor normativo o fuerza jurídica?",
+            opciones: {
+                a: "El Preámbulo.",
+                b: "Todas las partes de la Constitución tienen fuerza jurídica.",
+                c: "Las Disposiciones adicionales.",
+                d: "El Título Preliminar."
+            },
+            correcta: "a"
+        },
+        {
+            id: 48,
+            pregunta: "Conforme al artículo 13.1 de la Constitución Española:",
+            opciones: {
+                a: "Los extranjeros gozan en España, de las libertades públicas que garantiza el Título I de la Constitución.",
+                b: "Los extranjeros gozan en España, de las libertades del Capítulo II, Título I de la Constitución.",
+                c: "Los extranjeros gozan en España, de los derechos y libertades del Título I de la Constitución.",
+                d: "Los extranjeros gozan en España, de los derechos y libertades del Capítulo II, Título I de la Constitución."
+            },
+            correcta: "a"
+        },
+        {
+            id: 49,
+            pregunta:"Establece la Constitución Española que el derecho a la huelga deberá ser desarrollado por:",
+            opciones: {
+                a: "Ley.",
+                b: "Ley o Decreto-Legislativo.",
+                c: "Ley Ordinaria o Ley Orgánica según los casos.",
+                d: "Ley Orgánica."
+            },
+            correcta: "d"
+        },
+        {
+            id: 50,
+            pregunta: "Según la Constitución Española, ¿cuál de las siguientes es una función del Rey?",
+            opciones: {
+                a: "Proponer el nombramiento de los miembros del Tribunal Constitucional.",
+                b: "Separar a los miembros del Gobierno.",
+                c: "Autorizar a las Cortes Generales para declarar la guerra.",
+                d: "Proponer al presidente del Gobierno el nombramiento de los miembros de éste."
+            },
+            correcta: "b"
+        },
+        {
+            id: 51,
+            pregunta: "¿En quién recae, según la Constitución Española, la tutela del Rey preferentemente?",
+            opciones: {
+                a: "En el padre o madre mientras permanezcan viudos.",
+                b: "En la persona que designen las Cortes.",
+                c: "En la persona nombrada por el Rey difunto en su testamento.",
+                d: "En el Regente."
+            },
+            correcta: "c"
+        },
+        {
+            id: 52,
+            pregunta: "La Constitución Española considera al Rey símbolo de la unidad y permanencia de:",
+            opciones: {
+                a: "El Estado.",
+                b: "Las instituciones.",
+                c: "Los poderes públicos.",
+                d: "La Corona."
+            },
+            correcta: "a"
+        },
+        {
+            id: 53,
+            pregunta: "Para el sostenimiento de su Familia y Casa, la Constitución Española prevé que el Rey reciba de los Presupuestos del Estado:",
+            opciones: {
+                a: "Una asignación mínima.",
+                b: "Una cantidad suficiente.",
+                c: "Un fondo global.",
+                d: "Una cantidad global."
+            },
+            correcta: "d"
+        },
+        {
+            id: 54,
+            pregunta: "El artículo 34 de la Constitución Española reconoce el derecho de fundación para fines de:",
+            opciones: {
+                a: "Interés público.",
+                b: "Utilidad pública.",
+                c: "Interés general, con arreglo a la ley.",
+                d: "Obligado cumplimiento."
+            },
+            correcta: "c"
+        },
+        {
+            id: 55,
+            pregunta: "Conforme a la Constitución Española corresponde al Rey:",
+            opciones: {
+                a: "Nombrar al Defensor del Pueblo a propuesta del Presidente del Gobierno.",
+                b: "Ejercer el derecho de gracia con arreglo a la ley, que no podrá autorizar indultos generales.",
+                c: "Nombrar al Presidente del Tribunal Constitucional a propuesta del Presidente del Consejo General del Poder Judicial.",
+                d: "Nombrar a los Delegados del Gobierno a propuesta del Presidente del Gobierno."
+            },
+            correcta: "b"
+        },
+        {
+            id: 56,
+            pregunta: "Según el artículo 59 de la Constitución Española, si el Rey se inhabilitare para el ejercicio de su autoridad y la imposibilidad fuere reconocida por las Cortes Generales, entrará a ejercer inmediatamente la Regencia:",
+            opciones: {
+                a: "El Presidente del Gobierno.",
+                b: "El Príncipe heredero de la Corona, si fuere mayor de edad.",
+                c: "El Príncipe heredero de la Corona, aunque fuese menor de edad.",
+                d: "La Reina Regente."
+            },
+            correcta: "b"
+        },
+        {
+            id: 57,
+            pregunta: "De conformidad con el artículo 64 de la Constitución Española, la propuesta y el nombramiento del Presidente del Gobierno, y la disolución prevista en el artículo 99, serán refrendadas por:",
+            opciones: {
+                a: "El Rey.",
+                b: "Los Presidentes del Congreso y del Senado.",
+                c: "El Presidente del Congreso.",
+                d: "El Rey y los ministros competentes."
+            },
+            correcta: "c"
+        },
+        {
+            id: 58,
+            pregunta: "Por mandato constitucional, el Defensor del Pueblo, debe dar cuenta de su actuación a:",
+            opciones: {
+                a: "Las Cortes Generales.",
+                b: "El Consejo de Estado.",
+                c: "El Congreso de los Diputados.",
+                d: "El Pleno de las Cámaras."
+            },
+            correcta: "a"
+        },
+        {
+            id: 59,
+            pregunta: "En el establecimiento de las normas que permitan a los españoles hacer efectivo su derecho a disfrutar de una vivienda digna y adecuada, la Constitución dispone que los poderes públicos promoverán:",
+            opciones: {
+                a: "La participación de los mismos en las plusvalías que genere dicha actividad.",
+                b: "La utilización del suelo de acuerdo con el interés general para garantizar la solidaridad colectiva.",
+                c: "La utilización del suelo de acuerdo con el interés general para impedir la especulación.",
+                d: "Las condiciones necesarias que garanticen dicho derecho."
+            },
+            correcta: "d"
+        },
+        {
+            id: 60,
+            pregunta: "Se prevé por la Constitución un procedimiento de \"habeas corpus\" para que el detenido ilegalmente sea inmediatamente puesto:",
+            opciones: {
+                a: "En libertad.",
+                b: "A disposición policial.",
+                c: "A disposición judicial.",
+                d: "En libertad o a disposición judicial."
+            },
+            correcta: "c"
+        },
+        {
+            id: 61,
+            pregunta: "El referéndum en el que se aprobó popularmente la Constitución Española se llevó a efecto el:",
+            opciones: {
+                a: "27 diciembre de 1978.",
+                b: "6 diciembre de 1978.",
+                c: "31 octubre de 1978.",
+                d: "29 diciembre de 1979."
+            },
+            correcta: "b"
+        },
+        {
+            id: 62,
+            pregunta: "Si un power público, en su actuación, infringe lo dispuesto en el Preámbulo de la Constitución:",
+            opciones: {
+                a: "Incurre en nulidad",
+                b: "Incurre en inconstitucionalidad",
+                c: "No pasa nada, salvo que, como consecuencia de esa actuación, se infrinja un artículo de la propia CE",
+                d: "Todas son falsas"
+            },
+            correcta: "c"
+        },
+        {
+            id: 63,
+            pregunta: "Según se deduce de la Constitución Española, una norma que imponga una nueva pena más leve para un delito:",
+            opciones: {
+                a: "No se aplica retroactivamente.",
+                b: "Puede aplicarse retroactivamente.",
+                c: "Ha de ser reglamentaria.",
+                d: "Atenta contra el principio de legalidad penal si se aplica retroactivamente."
+            },
+            correcta: "b"
+        },
+        {
+            id: 64,
+            pregunta: "El Defensor del Pueblo se regula en el siguiente Título y Capítulo de la Constitución Española, respectivamente:",
+            opciones: {
+                a: "Preliminar y 1º.",
+                b: "Segundo y 4º.",
+                c: "Segundo y 3º.",
+                d: "Primero y 4º."
+            },
+            correcta: "d"
+        },
+        {
+            id: 65,
+            pregunta: "Un español de origen puede perder esta nacionalidad:",
+            opciones: {
+                a: "Por sanción administrativa.",
+                b: "Cuando libremente renuncie a la misma.",
+                c: "Por condena penal.",
+                d: "En ningún caso."
+            },
+            correcta: "b"
+        },
+        {
+            id: 66,
+            pregunta: "Las Comunidades Autónomas deben usar o instalar la bandera española:",
+            opciones: {
+                a: "En sus edificios.",
+                b: "En los actos oficiales.",
+                c: "Cuando lo solicite el Delegado del Gobierno de la Nación en las mismas.",
+                d: "Cuando lo estime oportuno."
+            },
+            correcta: "b"
+        },
+        {
+            id: 67,
+            pregunta: "Deberán tener una estructura interna y un funcionamiento democrático los/las:",
+            opciones: {
+                a: "Partidos Políticos.",
+                b: "Colegios Profesionales.",
+                c: "Organizaciones Profesionales.",
+                d: "Todas las respuestas son verdaderas."
+            },
+            correcta: "d"
+        },
+        {
+            id: 68,
+            pregunta: "Defender la integridad territorial de España se atribuye por la Constitución Española a:",
+            opciones: {
+                a: "Fuerzas y Cuerpos de Seguridad.",
+                b: "Fuerzas Armadas.",
+                c: "Gobierno de la Nación.",
+                d: "Todas las respuestas son verdaderas."
+            },
+            correcta: "b"
+        },
+        {
+            id: 69,
+            pregunta: "En virtud del principio de progresividad tributaria:",
+            opciones: {
+                a: "Se implantarán cada vez mayores tributos.",
+                b: "Los tipos impositivos serán regresivos.",
+                c: "Prima el principio de igualdad en el pago de los tributos.",
+                d: "Nada de lo expuesto es cierto."
+            },
+            correcta: "d"
+        },
+        {
+            id: 70,
+            pregunta: "Además de en la vida económica y política, los poderes públicos deben fomentar la participación de los ciudadanos en la vida:",
+            opciones: {
+                a: "Cultural.",
+                b: "Social.",
+                c: "Corporativa.",
+                d: "Las respuestas a y b son ciertas."
+            },
+            correcta: "d"
+        },
+        {
+            id: 71,
+            pregunta: "Según la Constitución Española, el Estado es:",
+            opciones: {
+                a: "Apolítico.",
+                b: "Aconfesional.",
+                c: "De bienestar social.",
+                d: "Federal."
+            },
+            correcta: "b"
+        },
+        {
+            id: 72,
+            pregunta: "El derecho a la vida se consagra en el siguiente artículo de la Constitución Española:",
+            opciones: {
+                a: "10.",
+                b: "16.",
+                c: "15.",
+                d: "24."
+            },
+            correcta: "c"
+        },
+        {
+            id: 73,
+            pregunta: "La pena de muerte en España:",
+            opciones: {
+                a: "Ha quedado abolida.",
+                b: "Puede aplicarse en cualquier momento.",
+                c: "Sólo se aplicará, en tiempo de guerra, a los militares.",
+                d: "Rige sólo en el ámbito civil."
+            },
+            correcta: "a"
+        },
+        {
+            id: 74,
+            pregunta: "La inmediata puesta a disposición judicial derivada del habeas corpus, se produce por:",
+            opciones: {
+                a: "Detención ilegal.",
+                b: "Prisión ilegal.",
+                c: "Prisión preventiva.",
+                d: "Detención preventiva."
+            },
+            correcta: "a"
+        },
+        {
+            id: 75,
+            pregunta: "La entrada en un domicilio en caso de flagrante delito, sin autorización de su titular:",
+            opciones: {
+                a: "Puede dar lugar a la aplicación del hábeas corpus.",
+                b: "Requiere autorización previa de la autoridad judicial.",
+                c: "Puede efectuarse en todo momento.",
+                d: "No puede realizarse en ningún momento."
+            },
+            correcta: "c"
+        },
+        {
+            id: 76,
+            pregunta: "Cuando, al conocerse la comisión de un delito por una persona, se acude a su domicilio para detenerla:",
+            opciones: {
+                a: "Está obligada a franquear la entrada.",
+                b: "Se necesita autorización judicial para entrar, si no da su consentimiento para ello.",
+                c: "Pese a que no dé su consentimiento, se puede entrar.",
+                d: "Nada de lo anterior es correcto."
+            },
+            correcta: "b"
+        },
+        {
+            id: 77,
+            pregunta: "Además de la no autoinculpación, la Constitución Española prevé que NO se está obligado a declarar sobre un hecho presuntamente delictivo en caso de:",
+            opciones: {
+                a: "Parentesco y afinidad.",
+                b: "Cláusula de conciencia.",
+                c: "Secreto profesional.",
+                d: "Las respuestas a y b son correctas."
+            },
+            correcta: "c"
+        },
+        {
+            id: 78,
+            pregunta: "Los Tribunales de Honor están prohibidos respecto de:",
+            opciones: {
+                a: "Sindicatos y Organizaciones Profesionales.",
+                b: "Administración Civil y Militar.",
+                c: "Organizaciones profesionales y la Administración Civil.",
+                d: "Las respuestas b y c son correctas."
+            },
+            correcta: "c"
+        },
+        {
+            id: 79,
+            pregunta: "El ejercicio del derecho de petición a través de una manifestación ciudadana:",
+            opciones: {
+                a: "No se admite.",
+                b: "Se admite en algún caso.",
+                c: "Se admite, salvo para los militares.",
+                d: "Ni se admite ni se prohíbe."
+            },
+            correcta: "a"
+        },
+        {
+            id: 80,
+            pregunta: "Nuestro sistema tributario ha de ser:",
+            opciones: {
+                a: "Regresivo e igualitario.",
+                b: "Progresivo y generalizado.",
+                c: "Confiscatorio.",
+                d: "Justo y regresivo."
+            },
+            correcta: "b"
+        },
+        {
+            id: 81,
+            pregunta: "Se produce una rotura definitiva del vínculo conyugal, debiendo regularse por ley según la Constitución Española, en caso de:",
+            opciones: {
+                a: "Cese de la convivencia matrimonial.",
+                b: "Disolución del matrimonio.",
+                c: "Separación.",
+                d: "Todas las respuestas son correctas."
+            },
+            correcta: "b"
+        },
+        {
+            id: 82,
+            pregunta: "La especulación urbanística, según la Constitución Española:",
+            opciones: {
+                a: "Debe evitarse.",
+                b: "Está permitida.",
+                c: "Genera plusvalías para la colectividad.",
+                d: "Pueden hacerla los poderes públicos."
+            },
+            correcta: "a"
+        },
+        {
+            id: 83,
+            pregunta: "Las fundaciones son:",
+            opciones: {
+                a: "Entidades constituidas para fines de interés general.",
+                b: "Administraciones Corporativas.",
+                c: "Entidades privadas con fines de carácter también privado.",
+                d: "Asociaciones de personas para conseguir fines de interés general."
+            },
+            correcta: "a"
+        },
+        {
+            id: 84,
+            pregunta: "La asistencia de todo orden a los hijos habidos extraconyugalmente:",
+            opciones: {
+                a: "No está prevista en la Constitución Española.",
+                b: "Es un deber de los padres.",
+                c: "Se dispensará por instituciones de Beneficencia.",
+                d: "Se dispensa solo a los que de ellos tengan discapacidad."
+            },
+            correcta: "b"
+        },
+        {
+            id: 85,
+            pregunta: "¿Cuál NO es un derecho fundamental?",
+            opciones: {
+                a: "Sindicación.",
+                b: "Investigación científica.",
+                c: "Secreto de las comunicaciones",
+                d: "Todas son correctas."
+            },
+            correcta: "b"
+        },
+        {
+            id: 86,
+            pregunta: "¿Cuál NO es un derecho fundamental?",
+            opciones: {
+                a: "Libertad de cátedra.",
+                b: "Negociación colectiva",
+                c: "Manifestación",
+                d: "Huelga."
+            },
+            correcta: "b"
+        },
+        {
+            id: 87,
+            pregunta: "Sí es un derecho fundamental:",
+            opciones: {
+                a: "Libre sindicación.",
+                b: "Petición.",
+                c: "Educación.",
+                d: "Todos son derechos fundamentales."
+            },
+            correcta: "d"
+        },
+        {
+            id: 88,
+            pregunta: "Una vez declarado el estado de excepción NO se puede suspender el derecho:",
+            opciones: {
+                a: "Huelga.",
+                b: "Enseñanza.",
+                c: "Adopción de medidas de conflicto colectivo.",
+                d: "Libertad de circulación."
+            },
+            correcta: "b"
+        },
+        {
+            id: 89,
+            pregunta: "Durante el estado de excepción, un detenido conserva el derecho:",
+            opciones: {
+                a: "72 horas para ser puesto a disposición judicial.",
+                b: "Secreto de comunicaciones.",
+                c: "Asistencia de letrado.",
+                d: "No conserva ninguno de los enunciados."
+            },
+            correcta: "c"
+        },
+        {
+            id: 90,
+            pregunta: "Se puede suspender, con motivo de investigaciones relativas a bandas armadas, el derecho de:",
+            opciones: {
+                a: "Huelga.",
+                b: "Inviolabilidad del domicilio.",
+                c: "Libertad de circulación.",
+                d: "Las respuestas b y c son correctas."
+            },
+            correcta: "b"
+        },
+        {
+            id: 91,
+            pregunta: "Según el Título Preliminar de la Constitución Española, la soberanía nacional reside en:",
+            opciones: {
+                a: "Las Cortes Generales.",
+                b: "El Gobierno.",
+                c: "El Rey.",
+                d: "El pueblo español."
+            },
+            correcta: "d"
+        },
+        {
+            id: 92,
+            pregunta: "¿Quién debe proteger el libre ejercicio de los derechos y libertades y garantizar la seguridad ciudadana?",
+            opciones: {
+                a: "El Gobierno.",
+                b: "Las Fuerzas Armadas.",
+                c: "Las Fuerzas y Cuerpos de Seguridad.",
+                d: "El Presidente del Gobierno."
+            },
+            correcta: "c"
+        },
+        {
+            id: 93,
+            pregunta: "NO es un valor superior del ordenamiento jurídico, según el artículo 1.1 de la Constitución Española:",
+            opciones: {
+                a: "La libertad.",
+                b: "La justicia.",
+                c: "La democracia.",
+                d: "El pluralismo político."
+            },
+            correcta: "c"
+        },
+        {
+            id: 94,
+            pregunta: "El derecho a disfrutar de un medio ambiente adecuado para el desarrollo de la persona es, según la Constitución Española:",
+            opciones: {
+                a: "Un derecho fundamental de los ciudadanos.",
+                b: "Un valor superior del ordenamiento jurídico.",
+                c: "Un principio rector de la política social y económica.",
+                d: "Una libertad pública."
+            },
+            correcta: "c"
+        },
+        {
+            id: 95,
+            pregunta: "Según el artículo 40 de la Constitución Española, los poderes públicos promoverán las condiciones favorables para el progreso social y económico y de manera especial realizarán una política orientada:",
+            opciones: {
+                a: "Al pleno empleo.",
+                b: "Al desarrollo sostenible.",
+                c: "A la mejora de las condiciones de los trabajadores.",
+                d: "A la incorporación de los colectivos más desfavorecidos."
+            },
+            correcta: "a"
+        },
+        {
+            id: 96,
+            pregunta: "La Constitución Española se fundamenta, según su Título Preliminar en:",
+            opciones: {
+                a: "La indisoluble unidad de la Nación española.",
+                b: "La Monarquía parlamentaria.",
+                c: "La riqueza de las distintas modalidades lingüísticas de España.",
+                d: "La soberanía nacional."
+            },
+            correcta: "a"
+        },
+        {
+            id: 97,
+            pregunta: "La parte de la Constitución Española que regula los derechos y deberes de los ciudadanos se denomina:",
+            opciones: {
+                a: "Parte dogmática.",
+                b: "Título Preliminar.",
+                c: "Parte orgánica.",
+                d: "Preámbulo."
+            },
+            correcta: "a"
+        },
+        {
+            id: 98,
+            pregunta: "La estructura interna y el funcionamiento de los sindicatos según el Título Preliminar de la Constitución Española deberán ser:",
+            opciones: {
+                a: "Participativos.",
+                b: "Liberales.",
+                c: "Democráticos.",
+                d: "Dialogantes."
+            },
+            correcta: "c"
+        },
+        {
+            id: 99,
+            pregunta: "De los actos del Rey serán responsables:",
+            opciones: {
+                a: "El propio Rey siempre.",
+                b: "El Jefe de la Casa del Rey.",
+                c: "Las personas que los refrenden.",
+                d: "El Presidente del Gobierno."
+            },
+            correcta: "c"
+        },
+        {
+            id: 100,
+            pregunta: "La convocatoria de referéndum en los casos previstos en la Constitución Española corresponde al:",
+            opciones: {
+                a: "Presidente del Gobierno.",
+                b: "Rey.",
+                c: "Presidente del Congreso de los Diputados.",
+                d: "Consejo de Gobierno."
+            },
+            correcta: "b"
+        },
+        {
+            id: 101,
+            pregunta: "Los actos del Rey serán refrendados:",
+            opciones: {
+                a: "Nunca.",
+                b: "En algunos casos.",
+                c: "Siempre, salvo el nombramiento de los miembros civiles y militares de su Casa.",
+                d: "Cuando lo establezcan las leyes."
+            },
+            correcta: "c"
+        },
+        {
+            id: 102,
+            pregunta: "¿Quién refrenda al Rey en el nombramiento del Presidente del Gobierno?",
+            opciones: {
+                a: "El Presidente del Gobierno saliente.",
+                b: "El Presidente del Congreso.",
+                c: "El Jefe de la Casa Real.",
+                d: "Este acto se realiza sin refrendo."
+            },
+            correcta: "b"
+        },
+        {
+            id: 103,
+            pregunta: "La Constitución Española regula la institución de la Corona en el:",
+            opciones: {
+                a: "Título III.",
+                b: "Título Preliminar.",
+                c: "Título I.",
+                d: "Título II."
+            },
+            correcta: "d"
+        },
+        {
+            id: 104,
+            pregunta: "De conformidad con la Constitución Española, ¿cuál de las siguientes funciones corresponde al Rey?",
+            opciones: {
+                a: "La iniciativa de reforma constitucional.",
+                b: "Dirigir la acción del Gobierno.",
+                c: "Proponer la disolución del Congreso, del Senado o de las Cortes Generales.",
+                d: "Convocar elecciones en los términos previstos en la Constitución."
+            },
+            correcta: "d"
+        },
+        {
+            id: 105,
+            pregunta: "Señale la respuesta correcta:",
+            opciones: {
+                a: "La sucesión en el trono seguirá el orden regular de premoriencia y representación.",
+                b: "La persona del Rey es inviolable y no está sujeto a responsabilidad.",
+                c: "Las abdicaciones y renuncias y cualquier duda de hecho o de derecho que ocurra en el orden de sucesión a la Corona se resolverán por una ley marco.",
+                d: "El Rey nombra y releva a los miembros civiles y militares de su Casa previa autorización de las Cortes Generales."
+            },
+            correcta: "b"
+        },
+        {
+            id: 106,
+            pregunta: "La Constitución Española permite el establecimiento de un servicio civil:",
+            opciones: {
+                a: "Para el cumplimiento de fines de interés general.",
+                b: "En casos de grave riesgo, catástrofe o calamidad pública.",
+                c: "Para el cumplimiento de fines de interés social.",
+                d: "En los supuestos de objeción de conciencia al servicio militar obligatorio."
+            },
+            correcta: "a"
+        },
+        {
+            id: 107,
+            pregunta: "Algunos Títulos de la Constitución Española se dividen en:",
+            opciones: {
+                a: "Subtítulos.",
+                b: "Secciones.",
+                c: "Apartados.",
+                d: "Capítulos."
+            },
+            correcta: "d"
+        },
+        {
+            id: 108,
+            pregunta: "De acuerdo con la Constitución Española, los poderes públicos deben garantizar a los ciudadanos durante la tercera edad:",
+            opciones: {
+                a: "Los servicios asistenciales suficientes.",
+                b: "La suficiencia adecuada.",
+                c: "Las pensiones públicas.",
+                d: "La suficiencia económica."
+            },
+            correcta: "d"
+        },
+        {
+            id: 109,
+            pregunta: "La conservación de la nacionalidad española, según la Constitución Española, tendrá lugar de acuerdo con lo establecido en:",
+            opciones: {
+                a: "La ley.",
+                b: "Los tratados de doble nacionalidad.",
+                c: "Los tratados y la ley.",
+                d: "El ordenamiento jurídico."
+            },
+            correcta: "a"
+        },
+        {
+            id: 110,
+            pregunta: "Los principios reconocidos en el Capítulo Tercero del Título Primero de la Constitución Española, según ésta dispone:",
+            opciones: {
+                a: "Pueden ser alegados ante los Juzgados y Tribunales en todo caso.",
+                b: "Sólo pueden ser alegados ante la Jurisdicción ordinaria de acuerdo con las leyes que los desarrollen.",
+                c: "Pueden ser alegados directamente ante el Tribunal Constitucional.",
+                d: "Sólo pueden ser alegados ante los Juzgados y Tribunales ordinarios de acuerdo con su contenido constitucional."
+            },
+            correcta: "b"
+        },
+        {
+            id: 111,
+            pregunta: "Para hacer efectivo el derecho a disfrutar de una vivienda digna y adecuada, la Constitución Española dispone que los poderes públicos:",
+            opciones: {
+                a: "Establecerán las normas pertinentes.",
+                b: "Regularán la participación en las plusvalías públicas y privadas.",
+                c: "Regularán las condiciones necesarias.",
+                d: "Sancionarán los atentados contra el mismo."
+            },
+            correcta: "a"
+        },
+        {
+            id: 112,
+            pregunta: "La Constitución Española reconoce el derecho de fundación:",
+            opciones: {
+                a: "Para fines de interés particular, con arreglo a la ley.",
+                b: "Para fines de interés público, de acuerdo con la ley.",
+                c: "Para fines de interés general, con arreglo a la ley.",
+                d: "Para fines de interés social, con arreglo a la ley."
+            },
+            correcta: "c"
+        },
+        {
+            id: 113,
+            pregunta: "La conservación de los bienes que integran el patrimonio histórico, cultural y artístico español alcanza, de acuerdo con la Constitución Española, a:",
+            opciones: {
+                a: "Todos los bienes de titularidad pública.",
+                b: "Cualquier bien, cualquiera que sea su titular.",
+                c: "Los bienes inmuebles.",
+                d: "Los bienes de régimen jurídico y titularidad privada."
+            },
+            correcta: "b"
+        },
+        {
+            id: 114,
+            pregunta: "España, según la Constitución Española, se constituye en un:",
+            opciones: {
+                a: "Estado socialista y democrático de Derecho.",
+                b: "Estado social y monárquico de Derecho.",
+                c: "Estado socialdemócrata y monárquico de Derecho.",
+                d: "Estado social y democrático de Derecho."
+            },
+            correcta: "d"
+        },
+        {
+            id: 115,
+            pregunta: "Para la salud se reconoce en la Constitución Española el derecho a:",
+            opciones: {
+                a: "La protección.",
+                b: "Las medidas preventivas.",
+                c: "La asistencia social y servicios necesarios.",
+                d: "Las prestaciones y servicios necesarios."
+            },
+            correcta: "a"
+        },
+        {
+            id: 116,
+            pregunta: "De acuerdo con la Constitución Española, el derecho de petición puede ser suspendido:",
+            opciones: {
+                a: "Cuando se declare el estado de excepción o de sitio.",
+                b: "En ningún caso puede suspenderse.",
+                c: "Sólo cuando se declare el estado de sitio.",
+                d: "Cuando se declare el estado de excepción o de sitio, el ejercicio colectivo de dicho derecho."
+            },
+            correcta: "b"
+        },
+        {
+            id: 117,
+            pregunta: "Según la Constitución Española, los poderes públicos deben promover el bienestar de los ciudadanos durante la tercera edad mediante un sistema de:",
+            opciones: {
+                a: "Servicios sociales.",
+                b: "Salud pública.",
+                c: "Seguridad social.",
+                d: "Servicios asistenciales."
+            },
+            correcta: "a"
+        },
+        {
+            id: 118,
+            pregunta: "La Constitución Española fue ratificada:",
+            opciones: {
+                a: "Por los Presidentes de las Diputaciones Provinciales.",
+                b: "Por los partidos políticos.",
+                c: "Por los sindicatos mayoritarios.",
+                d: "Por el pueblo español en referéndum."
+            },
+            correcta: "d"
+        },
+        {
+            id: 119,
+            pregunta: "La disolución de las fundaciones, de acuerdo con la Constitución Española, podrá realizarse:",
+            opciones: {
+                a: "Por resolución, debidamente motivada, de la autoridad competente.",
+                b: "Sólo en los supuestos de declaración de los estados de excepción o de sitio.",
+                c: "Por el Tribunal Constitucional exclusivamente.",
+                d: "Por resolución judicial motivada."
+            },
+            correcta: "d"
+        },
+        {
+            id: 120,
+            pregunta: "La Constitución Española está compuesta de:",
+            opciones: {
+                a: "Cuatro disposiciones transitorias, nueve adicionales, una derogatoria y una final.",
+                b: "Una disposición transitoria, cuatro adicionales, una derogatoria y dos finales.",
+                c: "Cuatro disposiciones adicionales, nueve transitorias, una derogatoria y una final.",
+                d: "Una disposición adicional, cuatro transitorias, una derogatoria y dos finales."
+            },
+            correcta: "c"
+        },
+        {
+            id: 121,
+            pregunta: "En el artículo 20 de la Constitución Española el derecho de producción y creación literaria:",
+            opciones: {
+                a: "Se reconoce.",
+                b: "Se garantiza.",
+                c: "Se reconoce y protege.",
+                d: "Se garantiza y protege."
+            },
+            correcta: "c"
+        },
+        {
+            id: 122,
+            pregunta: "¿Qué día fue aprobada por las Cortes Generales la Constitución Española?",
+            opciones: {
+                a: "El 31 de octubre de 1978.",
+                b: "El 6 de diciembre de 1978.",
+                c: "El 30 de octubre de 1978.",
+                d: "El 30 de noviembre de 1978."
+            },
+            correcta: "a"
+        },
+        {
+            id: 123,
+            pregunta: "En el caso de inhabilitación del Rey para el ejercicio de su autoridad, según la Constitución Española, es llamado a la Regencia, en primer lugar:",
+            opciones: {
+                a: "El Príncipe heredero, si es mayor de edad, y en defecto del padre o la madre.",
+                b: "La Reina consorte o el consorte de la Reina.",
+                c: "El Príncipe heredero, si es mayor de edad.",
+                d: "La persona designada por las Cortes Generales."
+            },
+            correcta: "c"
+        },
+        {
+            id: 124,
+            pregunta: "El relevo de los miembros civiles y militares de la Casa del Rey, según la Constitución Española:",
+            opciones: {
+                a: "Requiere autorización previa del Gobierno.",
+                b: "Se realiza por el Consejo de Ministros, a propuesta exclusiva del Rey.",
+                c: "Se realiza libremente por el Rey.",
+                d: "Se refrenda por el Presidente del Gobierno."
+            },
+            correcta: "c"
+        },
+        {
+            id: 125,
+            pregunta: "Como excepción a la exigencia de refrendo de los actos del Rey, la Constitución Española contempla:",
+            opciones: {
+                a: "La propuesta de candidato a Presidente del Gobierno.",
+                b: "La sanción y promulgación de las leyes aprobadas por las Cortes Generales.",
+                c: "El nombramiento y el relevo de los miembros civiles y militares de la Casa del Rey.",
+                d: "La concesión de empleos civiles y militares."
+            },
+            correcta: "c"
+        },
+        {
+            id: 126,
+            pregunta: "Corresponde al Rey, de acuerdo con la Constitución Española, nombrar y separar a:",
+            opciones: {
+                a: "Los titulares de los órganos de la Administración General del Estado.",
+                b: "Los Presidentes de las Cámaras.",
+                c: "Los miembros del Gobierno.",
+                d: "Los miembros de las Fuerzas Armadas."
+            },
+            correcta: "c"
+        },
+        {
+            id: 127,
+            pregunta: "Si el Rey en su testamento no designa tutor del Rey menor de edad, la Constitución Española atribuye la tutela al padre o la madre, siempre que:",
+            opciones: {
+                a: "Sean mayores de edad.",
+                b: "Permanezcan viudos.",
+                c: "Acepten expresamente la tutela.",
+                d: "Permanezcan en el cargo."
+            },
+            correcta: "c"
+        },
+        {
+            id: 128,
+            pregunta: "En el supuesto de que se extingan todas las líneas para la sucesión en la Corona, corresponde a las Cortes Generales, según la Constitución Española:",
+            opciones: {
+                a: "Nombrar a la persona a la que corresponda la Regencia.",
+                b: "Proveer a la sucesión en la forma más conveniente a los intereses de España.",
+                c: "Desempeñar las funciones propias de la Regencia.",
+                d: "Proveer a la sucesión en la forma más conveniente a los intereses de la Jefatura del Estado."
+            },
+            correcta: "b"
+        },
+        {
+            id: 129,
+            pregunta: "La disolución de las Cámaras y la convocatoria de nuevas elecciones por el Rey en el caso del artículo 99 de la Constitución Española, se refrenda por:",
+            opciones: {
+                a: "El Ministro competente.",
+                b: "El Presidente del Congreso de los Diputados.",
+                c: "Los Presidentes del Congreso y del Senado.",
+                d: "El Presidente del Gobierno."
+            },
+            correcta: "b"
+        },
+        {
+            id: 130,
+            pregunta: "De acuerdo con la Constitución Española, corresponden al Rey las funciones que le sean atribuidas expresamente por:",
+            opciones: {
+                a: "Las Cortes Generales, reunidas en sesión conjunta.",
+                b: "La Constitución y las leyes.",
+                c: "Las Cortes Generales y, en su caso, el Gobierno de la Nación.",
+                d: "La Constitución y las leyes orgánicas."
+            },
+            correcta: "b"
+        },
+        {
+            id: 131,
+            pregunta: "La Constitución Española dispone que el Rey:",
+            opciones: {
+                a: "Aprueba y sanciona las leyes.",
+                b: "Expide las leyes y decretos.",
+                c: "Sanciona y promulga las leyes.",
+                d: "Sanciona y ordena la publicación de las leyes."
+            },
+            correcta: "c"
+        },
+        {
+            id: 132,
+            pregunta: "La Constitución Española prevé que entrará a ejercer la Regencia, cuando el Rey sea menor de edad y en defecto del padre o la madre del Rey:",
+            opciones: {
+                a: "El Príncipe heredero.",
+                b: "El pariente mayor de edad más próximo a suceder en la Corona.",
+                c: "El pariente de más edad.",
+                d: "La persona nombrada en el testamento del Rey difunto."
+            },
+            correcta: "d"
+        },
+        {
+            id: 133,
+            pregunta: "Señale cuál de los siguientes enunciados es correcto, de conformidad con lo dispuesto en la Constitución Española de 1978:",
+            opciones: {
+                a: "La forma política del Estado español es la democracia parlamentaria.",
+                b: "Las personas condemned a pena de prisión que estuvieran cumpliendo la misma gozarán, sin excepción, de los derechos fundamentales recogidos en el Capítulo II del Título I de la Constitución.",
+                c: "El derecho del detenido a la asistencia de abogado en las diligencias penales y judiciales, en los términos que ley establezca, no podrá ser suspendido cuando se acuerde la declaración del estado de excepción.",
+                d: "Con carácter previo a la aprobación por las Cortes Generales de una reforma que afecte al Título II de la Constitución, el Rey deberá convocar un referéndum consultivo."
+            },
+            correcta: "a"
+        },
+        {
+            id: 134,
+            pregunta: "Señale cuál de los siguientes enunciados es correcto, de conformidad con lo dispuesto en la Constitución Española de 1978:",
+            opciones: {
+                a: "La Constitución española reconoce y protege el derecho a la producción y creación artística, sin más limitación que el respeto al derecho al honor.",
+                b: "Toda persona detenida ha de ser informada en el plazo máximo de 72 horas de las razones de su detención.",
+                c: "Los partidos políticos expresan el pluralismo político y la diversidad territorial del Estado español.",
+                d: "El ejercicio del derecho de reunión requerirá comunicación previa a la autoridad cuando la reunión se realice en lugares de tránsito público."
+            },
+            correcta: "b"
+        },
+        {
+            id: 135,
+            pregunta: "Señale cuál de los siguientes enunciados es correcto, de conformidad con lo dispuesto en la Constitución Española de 1978:",
+            opciones: {
+                a: "Los ciudadanos pueden ser obligados a declarar sobre su ideología cuando se hubiera declarado el estado de sitio.",
+                b: "Mediante ley se regularán las peculiaridades para los funcionarios públicos del ejercicio del derecho a sindicarse libremente.",
+                c: "Mediante ley orgánica se regularán los supuestos en los que la Administración civil puede imponer penas privativas de libertad.",
+                d: "Los miembros de las Fuerzas Armadas pueden ejercer el derecho de petición colectivamente, con arreglo a lo dispuesto en su legislación específica."
+            },
+            correcta: "c"
+        },
+        {
+            id: 136,
+            pregunta: "Señale cuál de los siguientes enunciados es correcto, de conformidad con lo dispuesto en la Constitución Española de 1978:",
+            opciones: {
+                a: "Mediante ley se determinarán los supuestos en los que un español de origen puede ser privado de su nacionalidad.",
+                b: "La prohibición de los Tribunales de Honor se restringe al ámbito de las organizaciones profesionales.",
+                c: "El plazo máximo de duración de la prisión provisional viene fijado por la propia Constitución.",
+                d: "Se prohíbe que se inicie la reforma constitucional durante la vigencia del estado de alarma."
+            },
+            correcta: "d"
+        },
+        {
+            id: 137,
+            pregunta: "Señale cuál de los siguientes enunciados es correcto, de conformidad con lo dispuesto en la Constitución Española de 1978:",
+            opciones: {
+                a: "En el juramento que el Rey ha de prestar al ser proclamado ante las Cortes Generales, se incluye el respeto de los derechos de las Comunidades Autónomas.",
+                b: "El Rey puede presidir las sesiones del Consejo de Ministros siempre que lo estime oportuno, sin más exigencia que la previa comunicación al presidente del Gobierno.",
+                c: "En el ejercicio del derecho de gracia, el Rey puede conceder indultos generales.",
+                d: "Para ser tutor del Rey bastará que la persona que en su testamento hubiera nombrado el Rey difunto sea mayor de edad y tenga la nacionalidad española."
+            },
+            correcta: "d"
+        },
+        {
+            id: 138,
+            pregunta: "Según el artículo 100 de la Constitución Española, los Ministros del Gobierno son nombrados por:",
+            opciones: {
+                a: "El Presidente del Gobierno.",
+                b: "El Congreso de los Diputados.",
+                c: "El Congreso de los Diputados y el Senado.",
+                d: "El Rey."
+            },
+            correcta: "a"
+        },
+        {
+            id: 139,
+            pregunta: "Conforme a la Constitución Española de 1978, en relación al derecho de asociación, responda la respuesta correcta:",
+            opciones: {
+                a: "Se regula en su artículo 21.",
+                b: "Las asociaciones constituidas al amparo del derecho de asociación deberán inscribirse en un registro a los efectos de su constitución formal.",
+                c: "Se prohíben las asociaciones secretas y las de carácter paramilitar.",
+                d: "Las asociaciones solo podrán ser disueltas o suspendidas en sus actividades en virtud de resolución judicial o administrativa motivada."
+            },
+            correcta: "d"
+        },
+        {
+            id: 140,
+            pregunta: "De conformidad con el artículo 41 de la Constitución Española, los poderes públicos deberán mantener un régimen público de Seguridad Social para todos los ciudadanos, que garantice la asistencia y prestaciones sociales suficientes ante situaciones de necesidad y, especialmente:",
+            opciones: {
+                a: "En caso de desempleo.",
+                b: "En caso de enfermedad.",
+                c: "En caso de necesidad económica.",
+                d: "En caso de crisis económica."
+            },
+            correcta: "d"
+        }
+    ],
+        "Bloque 3 - Tema 1: Entidad Relacion": [
+        {
+            id: 141,
+            pregunta: "En el modelo Entidad-Relación, el conjunto nominado de valores homogéneos que puede tomar una cierta característica, se denomina:",
+            opciones: {
+                a: "Atributo.",
+                b: "Dominio.",
+                c: "Entidad.",
+                d: "Diccionario de datos."
+            },
+            correcta: "b"
+        },
+        {
+            id: 142,
+            pregunta: "En el modelo Entidad-Relación extendido:",
+            opciones: {
+                a: "Una entidad regular es aquella cuya existencia depende de otra entidad.",
+                b: "Una entidad débil es aquella que tiene existencia por sí misma.",
+                c: "Todas las ocurrencias de un tipo de entidad deben tener los mismos atributos.",
+                d: "Una relación es regular si asocia una entidad regular y una entidad fuerte."
+            },
+            correcta: "c"
+        },
+        {
+            id: 143,
+            pregunta: "Una relación del modelo Entidad-Relación extendido según Métrica v3, NO se caracteriza por:",
+            opciones: {
+                a: "Nombre.",
+                b: "Tipo de Correspondencia.",
+                c: "Cardinalidad.",
+                d: "Dominio."
+            },
+            correcta: "d"
+        },
+        {
+            id: 144,
+            pregunta: "¿Cuál de los siguientes enunciados NO es un objetivo en la elaboración del modelo conceptual de datos?",
+            opciones: {
+                a: "Identificar y definir las entidades que quedan dentro del ámbito del sistema.",
+                b: "Identificar y definir los métodos asociados a cada una de las entidades del sistema.",
+                c: "Identificar y definir los atributos de cada entidad y sus dominios correspondientes.",
+                d: "Identificar y definir las relaciones existentes entre las entidades."
+            },
+            correcta: "b"
+        },
+        {
+            id: 145,
+            pregunta: "Señale cómo se denomina, en el modelo Entidad-Relación extendido, al número máximo de ocurrencias de cada tipo de entidad que pueden intervenir en una ocurrencia de la relación que se está tratando:",
+            opciones: {
+                a: "Tipo de correspondencia de la asociación.",
+                b: "Cardinalidad de la entidad.",
+                c: "Grado de la asociación.",
+                d: "Dominio de las entidades de la asociación."
+            },
+            correcta: "a"
+        },
+        {
+            id: 146,
+            pregunta: "Señale cómo se denomina, en el modelo Entidad-Relación extendido, la relación por la que un supertipo se descompone en uno o varios subtipos, los cuales heredan todos los atributos y relaciones del supertipo, además de tener los suyos propios:",
+            opciones: {
+                a: "Generalización.",
+                b: "Asociación.",
+                c: "Especialización.",
+                d: "Agregación."
+            },
+            correcta: "c"
+        },
+        {
+            id: 147,
+            pregunta: "El modelo entidad-relación está formado por:",
+            opciones: {
+                a: "Clases, objetos e instancias.",
+                b: "Variables y métodos.",
+                c: "Entidades, atributos y relaciones.",
+                d: "Entidades, objetos y clases."
+            },
+            correcta: "c"
+        },
+        {
+            id: 148,
+            pregunta: "En un modelo de datos Entidad-Relación, ¿qué se entiende por \"entidad débil\"?",
+            opciones: {
+                a: "Una entidad que no se encuentra relacionada con otra.",
+                b: "Una entidad que hereda todos sus atributos de otra.",
+                c: "Una entidad cuya existencia depende de la existencia de otra.",
+                d: "Ninguna de las respuestas anteriores define una entidad débil."
+            },
+            correcta: "c"
+        },
+        {
+            id: 149,
+            pregunta: "Qué esquema de bases de datos incluye la descripción de todos los datos e interrelaciones entre éstos, así como las restricciones de integridad y de confidencialidad:",
+            opciones: {
+                a: "Esquema interno.",
+                b: "Esquema conceptual.",
+                c: "Esquema externo.",
+                d: "Esquema físico."
+            },
+            correcta: "b"
+        },
+        {
+            id: 150,
+            pregunta: "Señale la respuesta INCORRECTA sobre las relaciones en el modelo Entidad-Relación Extendido:",
+            opciones: {
+                a: "Una relación se caracteriza por el nombre, tipo de correspondencia y la cardinalidad.",
+                b: "La relación puede ser regular, si asocia tipos de entidad regulares, o débil, si asocia un tipo de entidad débil con un tipo de entidad regular.",
+                c: "Dentro de las relaciones débiles se distinguen la dependencia en existencia y la dependencia en identificación.",
+                d: "Se dice que una relación es exclusiva cuando la existencia de una relación entre dos tipos de entidades implica la existencia de las otras relaciones."
+            },
+            correcta: "d"
+        },
+        {
+            id: 151,
+            pregunta: "Señale la respuesta correcta de las siguientes afirmaciones sobre el modelo Entidad-Relación Extendido:",
+            opciones: {
+                a: "Es un requisito el conocer el SGDB en el que se va a implementar.",
+                b: "Es dependiente del entorno físico.",
+                c: "Se centra en los datos, independientemente del procesamiento que los transforma.",
+                d: "Debe proporcionar a los usuarios toda la información que necesiten garantizando la eficiencia del proceso."
+            },
+            correcta: "c"
+        },
+        {
+            id: 152,
+            pregunta: "Tenemos las entidades \"opositor\" y \"oposición\" y sabemos que a los opositores se les permite apuntase a varias oposiciones distintas. Si quisiera crear el modelo conceptual de base de datos, ¿qué relación crearía?",
+            opciones: {
+                a: "Una relación N:M.",
+                b: "Una relación 1:N.",
+                c: "Una relación 1:1.",
+                d: "El modelo conceptual no admite relaciones, sólo el modelo relacional lo permite."
+            },
+            correcta: "a"
+        },
+        {
+            id: 153,
+            pregunta: "¿Cuál de las siguientes afirmaciones sobre el modelo Entidad-Relación es correcta?",
+            opciones: {
+                a: "En la especialización un supertipo se descompone en uno o varios subtipos, los cuales heredan todos los atributos y relaciones del supertipo.",
+                b: "La generalización consiste en relacionar dos tipos de entidades que normalmente son de dominios independientes, pero coyunturalmente se asocian.",
+                c: "La agregación permite abstraer un tipo de entidad de nivel superior (supertipo) a partir de varios tipos de entidad (subtipos).",
+                d: "La asociación consiste en construir un nuevo tipo de entidad como composición de otros."
+            },
+            correcta: "a"
+        },
+        {
+            id: 154,
+            pregunta: "En una relación del modelo Entidad-Relación:",
+            opciones: {
+                a: "La cardinalidad es igual que el tipo de correspondencia.",
+                b: "La cardinalidad máxima es igual que el tipo de correspondencia.",
+                c: "La cardinalidad mínima es igual con el tipo de correspondencia.",
+                d: "Todas las respuestas son falsas."
+            },
+            correcta: "b"
+        },
+        {
+            id: 155,
+            pregunta: "Un atributo puede ser:",
+            opciones: {
+                a: "Derivado, compuesto o significado.",
+                b: "Obligatorio, derivado o compuesto.",
+                c: "Obligatorio, derivado o significado.",
+                d: "Obligatorio, compuesto o significado."
+            },
+            correcta: "b"
+        },
+        {
+            id: 156,
+            pregunta: "En el modelo Entidad-Relación Extendido, a la abstracción de un tipo de entidad superior (supertipo) a partir de varios tipos de entidad (subtipos) se le denomina:",
+            opciones: {
+                a: "Generalización.",
+                b: "Especialización.",
+                c: "Agregación.",
+                d: "Asociación."
+            },
+            correcta: "a"
+        },
+        {
+            id: 157,
+            pregunta: "En el modelo Entidad-Relación podemos definir entidad como:",
+            opciones: {
+                a: "Cualquier objeto u elemento (real o abstracto) acerca del cual se puede almacenar información en la base de datos.",
+                b: "Cualquier asociación entre elementos.",
+                c: "El número de relaciones en las que un elemento puede aparecer.",
+                d: "Una propiedad concreta de una relación."
+            },
+            correcta: "a"
+        },
+        {
+            id: 158,
+            pregunta: "En el modelo Entidad-Relación, ¿qué se entiende por \"tipo de correspondencia\"?",
+            opciones: {
+                a: "El número máximo de ocurrencias de cada entidad que pueden intervenir en la relación.",
+                b: "El número de entidades que participan en una relación.",
+                c: "El número mínimo y máximo de ocurrencias de una entidad que pueden estar relacionadas con una ocurrencia de otra entidad participante en la relación.",
+                d: "Es el número de elementos con características comunes que componen una entidad."
+            },
+            correcta: "a"
+        },
+        {
+            id: 159,
+            pregunta: "En el modelo Entidad-Relación extendido, se tiene la siguiente jerarquía: empleado público es el supertipo y funcionario de carrera, funcionario interino y personal laboral, son los subtipos. Teniendo en cuenta que todo empleado público será un funcionario de carrera, un funcionario interino o personal laboral y que todo empleado público solo estar un uno de los subtipos. La jerarquía es:",
+            opciones: {
+                a: "Total y solapada.",
+                b: "Parcial y solapada.",
+                c: "Total y disjunta.",
+                d: "Parcial y disjunta."
+            },
+            correcta: "c"
+        },
+        {
+            id: 160,
+            pregunta: "En el modelo Entidad-Relación extendido, se tiene la siguiente jerarquía: documento es el supertipo y documento público, documento privado y documento mixto, son los subtipos. Teniendo en cuenta que un documento puede ser o no un documento público, privado o mixto, y que todo documento puede estar clasificado en más de un subtipo. La jerarquía es:",
+            opciones: {
+                a: "Total y solapada.",
+                b: "Parcial y solapada.",
+                c: "Total y disjunta.",
+                d: "Parcial y disjunta."
+            },
+            correcta: "b"
+        },
+        {
+            id: 161,
+            pregunta: "Teniendo en cuenta la jerarquía anterior (sobre tipos de documentos), la descomposición del supertipo documento en los subtipos descritos, se conoce como:",
+            opciones: {
+                a: "Asociación.",
+                b: "Exclusividad.",
+                c: "Especialización.",
+                d: "Generalización."
+            },
+            correcta: "c"
+        },
+        {
+            id: 162,
+            pregunta: "En el modelo Entidad-Relación extendido, si la entidad Aspirante se relaciona con la entidad Empresa a través de la relación Entrevista y se necesita modelar una relación entre la relación entrevista y la entidad Oferta de trabajo, ¿qué extensión se debería utilizar?",
+            opciones: {
+                a: "Asociación.",
+                b: "Categorías.",
+                c: "Agregación.",
+                d: "Generalización."
+            },
+            correcta: "c"
+        },
+        {
+            id: 163,
+            pregunta: "En el modelo Entidad-Relación extendido, NO es una restricción sobre atributo:",
+            opciones: {
+                a: "Derivado.",
+                b: "Compuesto.",
+                c: "Exclusivo.",
+                d: "Simple."
+            },
+            correcta: "c"
+        },
+        {
+            id: 164,
+            pregunta: "En el modelo Entidad-Relación extendido, las entidades pueden ser:",
+            opciones: {
+                a: "Normales o específicas.",
+                b: "Regulares o débiles.",
+                c: "Generales o dependientes.",
+                d: "Reales o abstractas."
+            },
+            correcta: "b"
+        },
+        {
+            id: 165,
+            pregunta: "La intensión es:",
+            opciones: {
+                a: "El número ocurrencias de una entidad.",
+                b: "La capacidad que tienen los modelos conceptuales de datos para representar entidades abstractas del mundo real.",
+                c: "Una ocurrencia concreta de una entidad.",
+                d: "El conjunto de entidades que poseen la misma estructura."
+            },
+            correcta: "d"
+        },
+        {
+            id: 166,
+            pregunta: "La extensión es:",
+            opciones: {
+                a: "El número de entidades representadas en un modelo de datos concreto.",
+                b: "El número de relaciones de un modelo de datos concreto.",
+                c: "El conjunto de ocurrencias de una entidad concreta.",
+                d: "Una ocurrencia concreta de una entidad."
+            },
+            correcta: "c"
+        },
+        {
+            id: 167,
+            pregunta: "Sobre el modelo Entidad-Relación extendido, señale la respuesta correcta:",
+            opciones: {
+                a: "Permite representar parte de los datos de un sistema.",
+                b: "Está ligado a una tecnología concreta.",
+                c: "Una de las extensiones permite modelas la funcionalidad de un sistema.",
+                d: "Es independiente del entorno físico."
+            },
+            correcta: "d"
+        },
+        {
+            id: 168,
+            pregunta: "En el modelo Entidad-Relación extendido, las relaciones reflexivas:",
+            opciones: {
+                a: "Son aquellas entre dos entidades independientes.",
+                b: "Se denominan también recursivas o exclusivas.",
+                c: "Son las llamadas relaciones ternarias.",
+                d: "Son aquellas en las que entidad se relaciona consigo misma."
+            },
+            correcta: "d"
+        },
+        {
+            id: 169,
+            pregunta: "En los modelos Entidad-Relación que se usan para modelar conceptualmente un esquema relacional:",
+            opciones: {
+                a: "Se produce dependencia por existencia cuando una entidad fuerte no puede existir sin otra entidad débil.",
+                b: "Se produce dependencia por identificación cuando las ocurrencias de la entidad fuerte no se pueden identificar solo mediante sus propios atributos, si no que se tiene que añadir la clave de la ocurrencia de otra entidad débil.",
+                c: "La cardinalidad es el número de entidades con la cual otra entidad se puede asociar mediante una relación binaria.",
+                d: "El grado es el número de valores que puede tomar el atributo de una entidad."
+            },
+            correcta: "c"
+        },
+        {
+            id: 170,
+            pregunta: "De entre los siguientes, ¿cuál NO es una técnica para crear modelos conceptuales de bases de datos?",
+            opciones: {
+                a: "Diagramas de estructura.",
+                b: "Diagramas ORM.",
+                c: "Diagramas UML.",
+                d: "Diagramas IDEF1X."
+            },
+            correcta: "a"
+        },
+        {
+            id: 171,
+            pregunta: "¿Cuál de las siguientes características relacionadas con los modelos conceptuales de datos es FALSA?",
+            opciones: {
+                a: "Representan la visión estática del dominio de la información del Sistema de información a modelar.",
+                b: "Ayudan a representar las necesidades de usuario.",
+                c: "Representan toda la información que va a tratar el Sistema de Información objeto del análisis.",
+                d: "Representan también el dominio de negocio del sistema de información."
+            },
+            correcta: "d"
+        },
+        {
+            id: 172,
+            pregunta: "¿Cómo se representa en el modelo Entidad-Relación extendido una relación?",
+            opciones: {
+                a: "Rectángulo simple.",
+                b: "Rectángulo doble.",
+                c: "Arco.",
+                d: "Rombo."
+            },
+            correcta: "d"
+        },
+        {
+            id: 173,
+            pregunta: "En el modelo Entidad-Relación extendido, señale la respuesta correcta:",
+            opciones: {
+                a: "Una relación no puede tener atributos propios.",
+                b: "Las relaciones unarias se conocen también como relaciones exclusivas.",
+                c: "La razón de cardinalidad es el número máximo de ocurrencias de cada tipo de entidad que pueden intervenir en una ocurrencia de la relación que se está tratando.",
+                d: "No hay obligación en que una relación tenga un nombre."
+            },
+            correcta: "c"
+        },
+        {
+            id: 174,
+            pregunta: "En el modelo Entidad-Relación extendido, construir un nuevo tipo de entidad como composición de otros y su tipo de relación y así poder manejarlo en un nivel de abstracción mayor se conoce como:",
+            opciones: {
+                a: "Categorías.",
+                b: "Agregación.",
+                c: "Desagregación.",
+                d: "Generalización."
+            },
+            correcta: "b"
+        },
+        {
+            id: 175,
+            pregunta: "¿Cómo se representa en el modelo Entidad-Relación extendido una jerarquía total?",
+            opciones: {
+                a: "Con una doble línea entre el supertipo y el triángulo.",
+                b: "Con una línea simple entre el supertipo y el triángulo.",
+                c: "Con un círculo o una O en el triángulo invertido.",
+                d: "Con una letra d en el triángulo invertido."
+            },
+            correcta: "a"
+        },
+        {
+            id: 176,
+            pregunta: "En el modelo Entidad-Relación extendido, ¿con qué letra se representa las uniones por categorías?",
+            opciones: {
+                a: "d.",
+                b: "o.",
+                c: "U.",
+                d: "C."
+            },
+            correcta: "c"
+        },
+        {
+            id: 177,
+            pregunta: "En una jerarquía del modelo Entidad-Relación extendido, si una ocurrencia del supertipo solo puede pertenecer a uno de los subtipos, se denomina:",
+            opciones: {
+                a: "Jerarquía total.",
+                b: "Jerarquía parcial.",
+                c: "Jerarquía disjunta.",
+                d: "Jerarquía solapada."
+            },
+            correcta: "c"
+        },
+        {
+            id: 178,
+            pregunta: "En una jerarquía del modelo Entidad-Relación extendido, si toda ocurrencia del supertipo pertenece siempre a algún subtipo, se denomina:",
+            opciones: {
+                a: "Jerarquía total.",
+                b: "Jerarquía parcial.",
+                c: "Jerarquía disjunta.",
+                d: "Jerarquía solapada."
+            },
+            correcta: "a"
+        },
+        {
+            id: 179,
+            pregunta: "En una jerarquía del modelo Entidad-Relación extendido, si una ocurrencia del supertipo puede pertenecer a varios subtipos, se denomina:",
+            opciones: {
+                a: "Jerarquía total.",
+                b: "Jerarquía parcial.",
+                c: "Jerarquía disjunta.",
+                d: "Jerarquía solapada."
+            },
+            correcta: "d"
+        },
+        {
+            id: 180,
+            pregunta: "En una jerarquía del modelo Entidad-Relación extendido, si una ocurrencia del supertipo no pertenece a algún subtipo, se denomina:",
+            opciones: {
+                a: "Jerarquía total.",
+                b: "Jerarquía parcial.",
+                c: "Jerarquía disjunta.",
+                d: "Jerarquía solapada."
+            },
+            correcta: "b"
+        },
+        {
+            id: 181,
+            pregunta: "En el modelo Entidad-Relación extendido, ¿con qué letra se representa una jerarquía disjunta?",
+            opciones: {
+                a: "d.",
+                b: "o.",
+                c: "U.",
+                d: "C."
+            },
+            correcta: "a"
+        },
+        {
+            id: 182,
+            pregunta: "En el modelo Entidad-Relación extendido, ¿con qué letra se representa una jerarquía solapada?",
+            opciones: {
+                a: "d.",
+                b: "o.",
+                c: "U.",
+                d: "C."
+            },
+            correcta: "b"
+        },
+        {
+            id: 183,
+            pregunta: "Señale la respuesta correcta relativa al Modelo Entidad/Relación Extendido según establece Métrica v3:",
+            opciones: {
+                a: "Un atributo se define sobre diversos dominios.",
+                b: "El dominio no tiene existencia propia y depende de las entidades, las relaciones o los atributos.",
+                c: "La entidad es aquel objeto, real o abstracto, acerca del cual se desea almacenar información en la base de datos.",
+                d: "La clave candidata es el conjunto de atributos que garantizan la unicidad de las ocurrencias e identifican la ocurrencia unívocamente."
+            },
+            correcta: "c"
+        },
+        {
+            id: 184,
+            pregunta: "En el modelo Entidad/Relación Extendido, al conjunto de valores que puede tomar un atributo se le denomina:",
+            opciones: {
+                a: "Entidad.",
+                b: "Recorrido.",
+                c: "Cardinalidad.",
+                d: "Dominio."
+            },
+            correcta: "d"
+        },
+        {
+            id: 185,
+            pregunta: "En el Entidad-Relación extendido, las relaciones N:M:",
+            options: {
+                a: "Cada ocurrencia de una entidad puede estar relacionada con cero, una o varias ocurrencias de la otra entidad y cada ocurrencia de la otra entidad puede corresponder a cero, una o varias ocurrencias de la primera.",
+                b: "Cada ocurrencia de una entidad puede estar relacionada con cero, una o varias ocurrencias de la otra entidad.",
+                c: "Cada ocurrencia de una entidad se relaciona con una y sólo una ocurrencia de la otra entidad.",
+                d: "Son las llamadas muchos a uno."
+            },
+            correcta: "a"
+        },
+        {
+            id: 186,
+            pregunta: "La razón de cardinalidad es:",
+            opciones: {
+                a: "Es el número mínimo de ocurrencias de cada tipo de entidad que pueden intervenir en una ocurrencia de la relación que se está tratando.",
+                b: "Es el número máximo de ocurrencias de cada tipo de entidad que pueden intervenir en una ocurrencia de la relación que se está tratando.",
+                c: "Es la participación en la relación de cada una de las entidades afectadas.",
+                d: "Es el número de atributos de una entidad."
+            },
+            correcta: "b"
+        },
+        {
+            id: 187,
+            pregunta: "El rol de una entidad:",
+            opciones: {
+                a: "Se especifica en las relaciones exclusivas.",
+                b: "Se especifica en las relaciones reflexivas.",
+                c: "Se especifica en las entidades débiles.",
+                d: "Se especifica en las relaciones ternarias."
+            },
+            correcta: "b"
+        },
+        {
+            id: 188,
+            pregunta: "Una relación se caracteriza por:",
+            opciones: {
+                a: "El grado y el tipo de correspondencia.",
+                b: "El tipo de correspondencia, el nombre y la cardinalidad.",
+                c: "El nombre, la cardinalidad, la extensión y la intensión.",
+                d: "El nombre, el grado, el tipo de correspondencia y la cardinalidad."
+            },
+            correcta: "d"
+        }
+    ]
+};
+
+// --- VARIABLES DE ESTADO ---
+let preguntasActuales = [];
+let indiceActual = 0;
+let respondido = false;
+
+// Al cargar la página, listamos los temas disponibles
+window.onload = function() {
+    const listaTemasDiv = document.getElementById('lista-temas');
+    Object.keys(bancoPreguntas).forEach(tema => {
+        listaTemasDiv.innerHTML += `
+            <label style="background: #eaeded; padding: 10px; border-radius: 5px; cursor:pointer; display:block;">
+                <input type="checkbox" name="temas" value="${tema}" checked> ${tema}
+            </label>
+        `;
+    });
+};
+
+// Configurar test normal basado en selección de temas y cantidad equitativa
+function iniciarTest() {
+    const checkboxes = document.querySelectorAll('input[name="temas"]:checked');
+    const cantidadTotalSolicitada = parseInt(document.getElementById('num-preguntas').value);
+    
+    if (checkboxes.length === 0) return alert("Selecciona al menos un tema");
+    if (isNaN(cantidadTotalSolicitada) || cantidadTotalSolicitada < 1) return alert("Introduce una cantidad válida de preguntas");
+
+    let temasSeleccionados = Array.from(checkboxes).map(cb => cb.value);
+    let totalTemas = temasSeleccionados.length;
+
+    // Calcular cuántas preguntas base tocan por tema
+    let preguntasPorTema = Math.floor(cantidadTotalSolicitada / totalTemas);
+    let resto = cantidadTotalSolicitada % totalTemas; // Lo sobrante por divisiones inexactas
+
+    preguntasActuales = [];
+
+    // Estructura temporal para guardar las preguntas elegidas por tema antes de juntarlas
+    let bolsaPreguntasFinales = [];
+
+    temasSeleccionados.forEach((tema, index) => {
+        // Clonamos y mezclamos de forma aleatoria las preguntas de este tema concreto
+        let preguntasDelTemaMezcladas = [...bancoPreguntas[tema]].sort(() => Math.random() - 0.5);
+        
+        // Si el 'resto' aún tiene elementos, a este tema le sumamos 1 pregunta extra
+        let cuotaActual = preguntasPorTema + (index < resto ? 1 : 0);
+
+        // Sacamos las preguntas que necesitamos para rellenar la cuota
+        let seleccionadas = preguntasDelTemaMezcladas.slice(0, cuotaActual);
+        bolsaPreguntasFinales = bolsaPreguntasFinales.concat(seleccionadas);
+    });
+
+    // Validar si el banco tiene suficientes preguntas en total
+    if (bolsaPreguntasFinales.length < cantidadTotalSolicitada) {
+        alert(`Aviso: No hay suficientes preguntas totales en los temas elegidos. Se han generado las ${bolsaPreguntasFinales.length} disponibles.`);
+    }
+
+    // Volvemos a mezclar el bloque total para que no salgan ordenadas por temas (primero todas las del tema 1 y luego las del tema 2)
+    preguntasActuales = bolsaPreguntasFinales.sort(() => Math.random() - 0.5);
+    
+    comenzarBucleTest();
+}
+
+// Configurar test usando SOLO las falladas/dudosas del localStorage
+function iniciarTestFalladas() {
+    let falladas = JSON.parse(localStorage.getItem('falladasTAI')) || [];
+    if (falladas.length === 0) return alert("¡Enhorabuena! No tienes preguntas falladas o dudosas guardadas.");
+    
+    // Las mezclamos para repasar de forma aleatoria
+    preguntasActuales = falladas.sort(() => Math.random() - 0.5);
+    comenzarBucleTest();
+}
+
+function comenzarBucleTest() {
+    indiceActual = 0;
+    document.getElementById('pantalla-config').classList.add('oculto');
+    document.getElementById('pantalla-test').classList.remove('oculto');
+    mostrarPregunta();
+}
+
+function mostrarPregunta() {
+    respondido = false;
+    document.getElementById('btn-siguiente').classList.add('oculto');
+    document.getElementById('chk-duda').checked = false;
+    
+    const p = preguntasActuales[indiceActual];
+    document.getElementById('info-progreso').innerText = `Pregunta ${indiceActual + 1} de ${preguntasActuales.length}`;
+    document.getElementById('texto-pregunta').innerText = p.pregunta;
+    
+    // Buscar a qué tema pertenece esta pregunta para mostrarlo en interfaz
+    let nombreTema = "Personalizado";
+    for(let tema in bancoPreguntas){
+        if(bancoPreguntas[tema].some(x => x.id === p.id)) nombreTema = tema;
+    }
+    document.getElementById('info-tema').innerText = nombreTema;
+
+    // Renderizar opciones
+    const contenedor = document.getElementById('contenedor-opciones');
+    contenedor.innerHTML = '';
+    
+    Object.entries(p.opciones).forEach(([letra, texto]) => {
+        contenedor.innerHTML += `
+            <div class="opcion" data-letra="${letra}" onclick="verificarRespuesta(this)">
+                <strong>${letra.toUpperCase()})</strong> ${texto}
+            </div>
+        `;
+    });
+}
+
+function verificarRespuesta(elementoSeleccionado) {
+    if (respondido) return; 
+    respondido = true;
+
+    const p = preguntasActuales[indiceActual];
+    const letraSeleccionada = elementoSeleccionado.getAttribute('data-letra');
+    const opcionesDivs = document.querySelectorAll('.opcion');
+    const esDudosa = document.getElementById('chk-duda').checked;
+
+    opcionesDivs.forEach(div => {
+        const letra = div.getAttribute('data-letra');
+        if (letra === p.correcta) {
+            div.classList.add('correcta'); 
+        }
+        if (letra === letraSeleccionada && letraSeleccionada !== p.correcta) {
+            div.classList.add('incorrecta'); 
+        }
+    });
+
+    if (letraSeleccionada !== p.correcta || esDudosa) {
+        guardarPreguntaFallada(p);
+    } else {
+        eliminarDeFalladas(p.id);
+    }
+
+    document.getElementById('btn-siguiente').classList.remove('oculto');
+}
+
+function guardarPreguntaFallada(pregunta) {
+    let falladas = JSON.parse(localStorage.getItem('falladasTAI')) || [];
+    if (!falladas.some(p => p.id === pregunta.id)) {
+        falladas.push(pregunta);
+        localStorage.setItem('falladasTAI', JSON.stringify(falladas));
+    }
+}
+
+function eliminarDeFalladas(id) {
+    let falladas = JSON.parse(localStorage.getItem('falladasTAI')) || [];
+    falladas = falladas.filter(p => p.id !== id);
+    localStorage.setItem('falladasTAI', JSON.stringify(falladas));
+}
+
+function siguientePregunta() {
+    indiceActual++;
+    if (indiceActual < preguntasActuales.length) {
+        mostrarPregunta();
+    } else {
+        alert("¡Has terminado este bloque de preguntas!");
+        document.getElementById('pantalla-test').classList.add('oculto');
+        document.getElementById('pantalla-config').classList.remove('oculto');
+    }
+}
+</script>
+
+</body>
+</html>
